@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
                   << std::endl;
         std::cout << "Example: " << argv[0]
                   << " music.exe volume.dll -args volume:100" << std::endl;
-        return 1;
+        return -1;
     }
     STARTUPINFO start_info = {sizeof(start_info)};
     PROCESS_INFORMATION process_info;
@@ -46,44 +46,53 @@ int main(int argc, char **argv) {
                       &process_info)) {
         std::list<LPVOID> pages;
         for (std::string dll_name : dlls) {
-            LPVOID page = VirtualAllocEx(process_info.hProcess, nullptr, BUFSIZE,
-                                         MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            LPVOID page =
+                VirtualAllocEx(process_info.hProcess, nullptr, BUFSIZE,
+                               MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
             pages.push_back(page);
             if (page == nullptr) {
                 std::cerr << "VirtualAllocEx error: " << GetLastError()
                           << std::endl;
-                return 1;
+                return -1;
             }
             if (WriteProcessMemory(process_info.hProcess, page,
                                    dll_name.c_str(), sizeof(dll_name),
                                    nullptr) == 0) {
                 std::cerr << "WriteProcessMemory error: " << GetLastError()
                           << std::endl;
-                return 1;
+                return -1;
             }
-            HANDLE thread = CreateRemoteThread(process_info.hProcess, nullptr, 0,
-                                               (LPTHREAD_START_ROUTINE)LoadLibraryA,
-                                               page, 0, nullptr);
+            HANDLE thread = CreateRemoteThread(
+                process_info.hProcess, nullptr, 0,
+                (LPTHREAD_START_ROUTINE)LoadLibraryA, page, 0, nullptr);
             if (thread == nullptr) {
                 std::cerr << "CreateRemoteThread error: " << GetLastError()
                           << std::endl;
-                return 1;
+                return -1;
             }
             if (WaitForSingleObject(thread, INFINITE) == WAIT_FAILED) {
                 std::cerr << "WaitForSingleObject error: " << GetLastError()
                           << std::endl;
-                return 1;
+                return -1;
             }
             CloseHandle(thread);
             std::cout << "Loaded " << dll_name << std::endl;
         }
         if (ResumeThread(process_info.hThread) == -1) {
             std::cerr << "ResumeThread error: " << GetLastError() << std::endl;
-            return 1;
+            return -1;
         }
         CloseHandle(process_info.hProcess);
-        for(auto page : pages){
-            VirtualFreeEx(process_info.hProcess, page, BUFSIZE, MEM_RELEASE);
+        for (auto page : pages) {
+            if (!VirtualFreeEx(process_info.hProcess, page, BUFSIZE,
+                               MEM_RELEASE)) {
+                std::cerr << "VirtualFreeEx error: " << GetLastError()
+                          << std::endl;
+                return -1;
+            }
         }
+        return 0;
     }
+    std::cerr << "CreateProcess error: " << GetLastError() << std::endl;
+    return -1;
 }
