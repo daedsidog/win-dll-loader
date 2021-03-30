@@ -10,10 +10,7 @@ int main(int argc, char **argv) {
     if (argc <
         3) { // Needs self (always given), target program, target dll as args.
         std::cout << "Usage: " << argv[0]
-                  << " <target program> <DLLs to load> -args <args>"
-                  << std::endl;
-        std::cout << "Arguments will be passed down to the target program."
-                  << std::endl
+                  << " <target executable> <DLLs to load> -args <arguments passed to target executable>"
                   << std::endl;
         std::cout << "Example: " << argv[0]
                   << " music.exe volume.dll -args volume:100" << std::endl;
