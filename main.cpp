@@ -42,7 +42,6 @@ int main(int argc, char **argv) {
         }
         args << " " << argv[i];
     }
-    std::cout << args.str() << std::endl;
 
     // Change the working directory to the target binary instead of the location
     // from which the loader is called.
