@@ -3,6 +3,7 @@
 #include <string>
 #include <list>
 #include <windows.h>
+#include <filesystem>
 
 #define BUFSIZE 1024
 
@@ -10,25 +11,30 @@ int main(int argc, char **argv) {
     if (argc <
         3) { // Needs self (always given), target program, target dll as args.
         std::cout << "Usage: " << argv[0]
-                  << " <target executable> <DLLs to load> -args <arguments passed to target executable>"
+                  << " <target executable> <DLLs to load> -args <arguments "
+                     "passed to target executable>"
                   << std::endl;
         std::cout << "Example: " << argv[0]
                   << " music.exe volume.dll -args volume:100" << std::endl;
         return -1;
     }
-    STARTUPINFO start_info = {sizeof(start_info)};
-    PROCESS_INFORMATION process_info;
-    std::string program_name = argv[1];
+    STARTUPINFO            start_info = {sizeof(start_info)};
+    PROCESS_INFORMATION    process_info;
+    std::string            program_name = argv[1];
     std::list<std::string> dlls;
+    std::filesystem::path  target_binary_abs_path =
+        std::filesystem::absolute(std::filesystem::path(program_name));
 
     // Format passed down to loader to pass to process.
     std::stringstream args;
-    args << program_name;
+    args << target_binary_abs_path.string();
     bool reading_args = false;
     for (int i = 2; i < argc; ++i) {
         if (!reading_args) {
             if (std::string(argv[i]) != "-args") {
-                dlls.push_back(argv[i]);
+                std::filesystem::path abs_dll_path =
+                    std::filesystem::absolute(std::filesystem::path(argv[i]));
+                dlls.push_back(abs_dll_path.string());
                 continue;
             }
             reading_args = true;
@@ -36,6 +42,12 @@ int main(int argc, char **argv) {
         }
         args << " " << argv[i];
     }
+    std::cout << args.str() << std::endl;
+
+    // Change the working directory to the target binary instead of the location
+    // from which the loader is called.
+    std::filesystem::current_path(target_binary_abs_path.parent_path());
+
     // Launch the target process.
     // &std::string[0] is equivalent to char*.
     if (CreateProcess(nullptr, &(args.str())[0], nullptr, nullptr, FALSE,
@@ -43,6 +55,7 @@ int main(int argc, char **argv) {
                       &process_info)) {
         std::list<LPVOID> pages;
         for (std::string dll_name : dlls) {
+
             LPVOID page =
                 VirtualAllocEx(process_info.hProcess, nullptr, BUFSIZE,
                                MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
